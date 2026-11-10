@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nextrade-worker"
+version = "0.1.0"
+description = "NEXTRADE AI — Celery Background Worker & Scheduler Skeleton (Phase 1 Foundation)"
+requires-python = ">=3.12,<3.13"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["worker_app*"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_generics = true
+no_implicit_reexport = true
+plugins = ["pydantic.mypy"]
+exclude = [
+  "^\\.venv/",
+]
+
+[[tool.mypy.overrides]]
+module = [
+  "celery.*",
+]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "worker_app.tasks.*",
+]
+disallow_untyped_decorators = false
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+markers = [
+  "unit: Fast unit tests without external network/database dependencies",
+  "integration: Tests requiring PostgreSQL, Redis, or full Compose stack",
+]

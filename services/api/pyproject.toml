@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nextrade-api"
+version = "0.1.0"
+description = "NEXTRADE AI — FastAPI Modular Monolith Backend (Phase 1 Foundation)"
+requires-python = ">=3.12,<3.13"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["app*"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+disallow_any_generics = true
+no_implicit_reexport = true
+plugins = ["pydantic.mypy"]
+exclude = [
+  "^\\.venv/",
+  "^alembic/versions/",
+]
+
+[[tool.mypy.overrides]]
+module = [
+  "alembic.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra --strict-markers --strict-config"
+testpaths = ["tests"]
+markers = [
+  "unit: Fast unit tests without external network/database dependencies",
+  "integration: Tests requiring PostgreSQL, Redis, or full Compose stack",
+]

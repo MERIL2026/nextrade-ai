@@ -1,0 +1,15 @@
+# Documentation Conflict & Open Decisions Register
+
+This register records conflicts and unresolved decisions identified across `NEX-DOC-001` through `NEX-DOC-026` that affect **Phase 2+ implementation**. Per project governance, none of these future-phase conflicts are silently decided during Phase 1.
+
+| ID | Topic | Conflicting Documents / Variants | Phase Impact | Required Resolution Owner |
+|---|---|---|---|---|
+| **CONF-001** | **Research Signal Vocabulary & Labels** | `NEX-DOC-007` / `013` / `014` / `025` use `BUY / HOLD / SELL / INSUFFICIENT_EVIDENCE`; `NEX-DOC-002` uses `Buy / Watch / Hold / Avoid` (FR-011) and `Watch / Positive / Neutral / Caution` (§16); `NEX-DOC-009` §14.1 uses `POSITIVE_RESEARCH_BIAS`; `NEX-DOC-019` §3.3 & §11.1 restrict retail `BUY/SELL/HOLD` wording pending SEBI/SEC legal review. | Phase 3–6 | Product + Compliance/Legal + Quant Lead |
+| **CONF-002** | **API Resource Paths Across Specs** | `NEX-DOC-006` §8 lists `/assistant/sessions`, `/search`, `/markets/...`, `/admin/health`; `NEX-DOC-009` lists `/assistant/conversations`, `/instruments`, `/market/...`, `/health`; `NEX-DOC-025` §8 lists `/assistant/query`, `/admin/ingestion/jobs`. | Phase 2–6 | Backend Lead + Frontend Lead |
+| **CONF-003** | **Authentication Implementation Strategy** | `NEX-DOC-006` / `009` / `018` specify server-managed HttpOnly SameSite cookie sessions with Argon2id (`core.sessions`), while `NEX-DOC-006` §25 and `011` §20 leave managed auth vs app-managed sessions open. | Phase 2 / 7 | Security Reviewer + Backend Lead |
+| **CONF-004** | **PostgreSQL Extensions & Physical Schema Caveats** | `NEX-DOC-007` uses `CITEXT` for `core.users.email`; `NEX-DOC-008` §11 notes open verification of `CITEXT` collation, `price_bars` partitioning keys, `fx_rates`, and mutual fund NAV entities; `pgvector` and `TimescaleDB` remain optional/deferred (`NEX-DOC-006` §25). | Phase 2 | Database / Backend Lead |
+| **CONF-005** | **Market Data & News Provider Licensing** | Multiple candidate sources listed (`NEX-DOC-010`, `025` §6.1), but commercial display, caching, historical depth, and redistribution terms remain unselected/pending legal review. | Phase 2+ | Product + Data Owner + Legal |
+| **CONF-006** | **Charting Library Licensing** | `TradingView Lightweight Charts` is proposed (`NEX-DOC-006`, `011`), conditioned on verifying Apache 2.0 / attribution / redistribution compliance before shipping charts in UI. | Phase 6 | Frontend Lead + Legal |
+| **CONF-007** | **Hosting, Production LLM, RPO/RTO & SLOs** | Production cloud vendor/region, Ollama vs hosted LLM privacy/retention, and numeric RPO/RTO/SLO commitments remain open pending benchmarks (`NEX-DOC-006` §25, `011` §20, `022` §17). | Phase 7–8 | Operations + Product + Security |
+| **CONF-008** | **Minor Editorial Metadata Defect** | `NEX-DOC-011` (*Infrastructure & Environment Setup Guide*) footer prints `NEX-DOC-009` on pages 2–12. Keep official index `NEX-DOC-011` authoritative. | Documentation | Documentation Owner |
+

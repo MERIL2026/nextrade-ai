@@ -1,0 +1,28 @@
+#!/bin/sh
+set -eu
+
+: "${POSTGRES_APP_USER:=nextrade_app}"
+: "${POSTGRES_APP_PASSWORD:?POSTGRES_APP_PASSWORD is required}"
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<'EOSQL'
+\getenv app_user POSTGRES_APP_USER
+\getenv app_password POSTGRES_APP_PASSWORD
+\getenv target_db POSTGRES_DB
+
+SELECT format(
+  'CREATE ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS',
+  :'app_user',
+  :'app_password'
+)
+WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'app_user')\gexec
+
+SELECT format(
+  'ALTER ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS',
+  :'app_user',
+  :'app_password'
+)\gexec
+
+SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'target_db', :'app_user')\gexec
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+EOSQL
+

@@ -1,0 +1,6 @@
+# Direct Phase 1 runtime dependencies for NEXTRADE AI Celery worker & scheduler.
+celery[redis]>=5.4.0,<6.0.0
+pydantic>=2.9.0,<3.0.0
+pydantic-settings>=2.6.0,<3.0.0
+redis>=5.2.0,<9.0.0
+
