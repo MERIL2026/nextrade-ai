@@ -259,16 +259,58 @@ jobs:
             exit 1
           fi
 
-          set -a
-          source "$RUNNER_TEMP/ci.env"
-          set +a
+          python - <<'PY'
+          import os
+          import pathlib
+          import subprocess
 
-          docker compose --env-file "$RUNNER_TEMP/ci.env" run --rm --no-deps \
-            -e MIGRATION_DATABASE_URL -e POSTGRES_APP_USER api alembic upgrade head
-          docker compose --env-file "$RUNNER_TEMP/ci.env" run --rm --no-deps \
-            -e MIGRATION_DATABASE_URL -e POSTGRES_APP_USER api alembic downgrade base
-          docker compose --env-file "$RUNNER_TEMP/ci.env" run --rm --no-deps \
-            -e MIGRATION_DATABASE_URL -e POSTGRES_APP_USER api alembic upgrade head
+
+          def parse_compose_env(path: pathlib.Path) -> dict[str, str]:
+              values: dict[str, str] = {}
+              for raw_line in path.read_text(encoding="utf-8").splitlines():
+                  stripped = raw_line.strip()
+                  if not stripped or stripped.startswith("#") or "=" not in raw_line:
+                      continue
+                  key, val = raw_line.rstrip("\r\n").split("=", 1)
+                  key = key.strip()
+                  if key:
+                      values[key] = val
+              return values
+
+
+          env_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ci.env"
+          cfg = parse_compose_env(env_path)
+
+          # Explicitly pass only migration-scoped variables; never source Compose env files in Bash.
+          child_env = os.environ.copy()
+          child_env["MIGRATION_DATABASE_URL"] = cfg["MIGRATION_DATABASE_URL"]
+          child_env["POSTGRES_APP_USER"] = cfg["POSTGRES_APP_USER"]
+
+          for alembic_cmd in (
+              ["alembic", "upgrade", "head"],
+              ["alembic", "downgrade", "base"],
+              ["alembic", "upgrade", "head"],
+          ):
+              subprocess.run(
+                  [
+                      "docker",
+                      "compose",
+                      "--env-file",
+                      str(env_path),
+                      "run",
+                      "--rm",
+                      "--no-deps",
+                      "-e",
+                      "MIGRATION_DATABASE_URL",
+                      "-e",
+                      "POSTGRES_APP_USER",
+                      "api",
+                      *alembic_cmd,
+                  ],
+                  env=child_env,
+                  check=True,
+              )
+          PY
 
       - name: Run cross-service integration tests, Celery task, and Redis 503 failure simulation
         shell: bash
@@ -278,30 +320,75 @@ jobs:
           .venv-int/bin/pip install --upgrade pip
           .venv-int/bin/pip install -r services/api/requirements-dev.txt
 
-          set -a
-          source "$RUNNER_TEMP/ci.env"
-          set +a
+          python - <<'PY'
+          import os
+          import pathlib
+          import subprocess
 
-          export NEXTRADE_RUN_LIVE_INTEGRATION=1
-          export INTEGRATION_API_BASE_URL="http://127.0.0.1:${API_HOST_PORT}"
-          export INTEGRATION_WEB_BASE_URL="http://127.0.0.1:${WEB_HOST_PORT}"
-          export INTEGRATION_POSTGRES_DSN="postgresql://${POSTGRES_OWNER_USER}:${POSTGRES_OWNER_PASSWORD}@127.0.0.1:${POSTGRES_HOST_PORT}/${POSTGRES_DB}"
-          export INTEGRATION_REDIS_HOST="127.0.0.1"
-          export INTEGRATION_REDIS_PORT="${REDIS_HOST_PORT}"
-          export INTEGRATION_REDIS_URL="redis://:${REDIS_PASSWORD}@127.0.0.1:${REDIS_HOST_PORT}/0"
 
-          .venv-int/bin/python -m pytest tests/integration/test_foundation_integration.py -p no:asyncio -v
+          def parse_compose_env(path: pathlib.Path) -> dict[str, str]:
+              values: dict[str, str] = {}
+              for raw_line in path.read_text(encoding="utf-8").splitlines():
+                  stripped = raw_line.strip()
+                  if not stripped or stripped.startswith("#") or "=" not in raw_line:
+                      continue
+                  key, val = raw_line.rstrip("\r\n").split("=", 1)
+                  key = key.strip()
+                  if key:
+                      values[key] = val
+              return values
+
+
+          env_path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "ci.env"
+          cfg = parse_compose_env(env_path)
+
+          child_env = os.environ.copy()
+          child_env["NEXTRADE_RUN_LIVE_INTEGRATION"] = "1"
+          child_env["INTEGRATION_API_BASE_URL"] = f"http://127.0.0.1:{cfg['API_HOST_PORT']}"
+          child_env["INTEGRATION_WEB_BASE_URL"] = f"http://127.0.0.1:{cfg['WEB_HOST_PORT']}"
+          child_env["INTEGRATION_POSTGRES_DSN"] = (
+              f"postgresql://{cfg['POSTGRES_OWNER_USER']}:{cfg['POSTGRES_OWNER_PASSWORD']}"
+              f"@127.0.0.1:{cfg['POSTGRES_HOST_PORT']}/{cfg['POSTGRES_DB']}"
+          )
+          child_env["INTEGRATION_REDIS_HOST"] = "127.0.0.1"
+          child_env["INTEGRATION_REDIS_PORT"] = cfg["REDIS_HOST_PORT"]
+          child_env["INTEGRATION_REDIS_URL"] = (
+              f"redis://:{cfg['REDIS_PASSWORD']}@127.0.0.1:{cfg['REDIS_HOST_PORT']}/0"
+          )
+          child_env["POSTGRES_APP_USER"] = cfg["POSTGRES_APP_USER"]
+
+          subprocess.run(
+              [
+                  ".venv-int/bin/python",
+                  "-m",
+                  "pytest",
+                  "tests/integration/test_foundation_integration.py",
+                  "-p",
+                  "no:asyncio",
+                  "-v",
+              ],
+              env=child_env,
+              check=True,
+          )
+          PY
 
           docker compose --env-file "$RUNNER_TEMP/ci.env" exec -T worker python -c \
             "from worker_app.tasks.system import heartbeat; out = heartbeat.delay().get(timeout=15); assert out['status'] == 'ok'"
 
+          api_host_port="$(python -c 'import os, pathlib; lines = pathlib.Path(os.environ["RUNNER_TEMP"], "ci.env").read_text(encoding="utf-8").splitlines(); print(next(l.split("=", 1)[1].strip() for l in lines if not l.lstrip().startswith("#") and "=" in l and l.split("=", 1)[0].strip() == "API_HOST_PORT"))')"
+          if ! [[ "$api_host_port" =~ ^[0-9]+$ ]]; then
+            echo "ERROR: Invalid API_HOST_PORT parsed from ci.env"
+            exit 1
+          fi
+
           docker compose --env-file "$RUNNER_TEMP/ci.env" stop redis
-          status_code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:${API_HOST_PORT}/api/v1/health)"
+          status_code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${api_host_port}/api/v1/health")"
           test "$status_code" = "503"
 
           docker compose --env-file "$RUNNER_TEMP/ci.env" start redis
+          rec_code=""
           for _ in $(seq 1 30); do
-            rec_code="$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:${API_HOST_PORT}/api/v1/health || true)"
+            rec_code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${api_host_port}/api/v1/health" || true)"
             if [ "$rec_code" = "200" ]; then
               break
             fi
